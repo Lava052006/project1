@@ -1,105 +1,51 @@
 import pandas as pd
-from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+FILE_PATH="pg_management_monthly.xlsx"
 
-EXCEL_PATH = "pg_management.xlsx"
+def create_monthly_sheet(month_name):
+    wb=load_workbook(FILE_PATH)
+    if month_name in wb.sheetnames:
+         print(f"⚠️ Sheet '{month_name}' already exists.")
+         return
+    
+    ws=wb["Customer List"]
+    
+    master_df=pd.read_excel(FILE_PATH,sheet_name="Customer List")
+    new_df=pd.DataFrame(columns=[
+            "Tenant Name", "Room No", "Rent", "Elec. Start", "Elec. End",
+            "Units Used", "Rate/Unit", "Elec. Bill", "Total Due",
+            "Paid On", "Amount Paid", "Balance"
+        ])
 
-# Load Excel sheets
-def load_data():
-    rooms_df = pd.read_excel(EXCEL_PATH, sheet_name='Rooms')
-    customers_df = pd.read_excel(EXCEL_PATH, sheet_name='Customers')
-    payments_df = pd.read_excel(EXCEL_PATH, sheet_name='Payments')
-    print(rooms_df)
-    print(customers_df)
-    print(payments_df)
-    return rooms_df, customers_df, payments_df
+    for row in ws.iter_rows(min_row=2,values_only=True):
+        tenant_name,room_no,rent,checkin,checkout=row
+        if checkout is None or checkout=="":
+            print(f"Adding {tenant_name} with room {room_no} and rent ₹{rent}")
+            new_row = pd.DataFrame([{
+                "Tenant Name": tenant_name,
+                "Room No": room_no,
+                "Rent": rent,
+                "Rate/Unit": 10  # Default rate per unit; you can change this
+            }])
+            new_df=pd.concat([new_df,new_row],ignore_index=True)
+             # Add the new sheet to the workbook
+            ws_new = wb.create_sheet(title=month_name)
 
-# Save updated data
-def save_data(rooms_df, customers_df, payments_df):
-    with pd.ExcelWriter(EXCEL_PATH, engine='openpyxl', mode='w') as writer:
-        rooms_df.to_excel(writer, sheet_name='Rooms', index=False)
-        customers_df.to_excel(writer, sheet_name='Customers', index=False)
-        payments_df.to_excel(writer, sheet_name='Payments', index=False)
+    # Write DataFrame to new sheet
+    for r in dataframe_to_rows(new_df, index=False, header=True):
+            ws_new.append(r)
 
-# Add a new customer
-def add_customer():
-    name = input("Customer Name: ")
-    phone = input("Phone Number: ")
-    room = input("Room ID: ")
-    checkin = input("Check-In Date (YYYY-MM-DD): ")
-    deposit = int(input("Deposit (₹): "))
-    electricity = int(input("Initial Electricity (₹): "))
+    # Save the workbook
+    wb.save(FILE_PATH)
+    print(f"✅ Monthly sheet '{month_name}' created successfully.")
+    
 
-    customers_df.loc[len(customers_df.index)] = [name, phone, room, checkin, "", deposit, electricity, "No", "No"]
-    rooms_df.loc[rooms_df['Room ID'] == room, 'Status'] = "Occupied"
-    print(f"{name} added successfully.")
 
-# Record a payment
-def record_payment():
-    name = input("Customer Name: ")
-    month = input("Month: ")
-    rent = int(input("Rent Paid: "))
-    electricity = int(input("Electricity Paid: "))
-    total = rent + electricity
-    date = datetime.today().strftime('%Y-%m-%d')
 
-    payments_df.loc[len(payments_df.index)] = [name, month, rent, electricity, total, date]
-
-    customers_df.loc[customers_df['Customer Name'] == name, 'Paid Rent'] = "Yes"
-    customers_df.loc[customers_df['Customer Name'] == name, 'Paid Electricity'] = "Yes"
-    print("Payment recorded.")
-
-# Checkout customer
-def checkout_customer():
-    name = input("Customer Name: ")
-    date = input("Checkout Date (YYYY-MM-DD): ")
-    customers_df.loc[customers_df['Customer Name'] == name, 'Check-Out'] = date
-    room = customers_df.loc[customers_df['Customer Name'] == name, 'Room ID'].values[0]
-    rooms_df.loc[rooms_df['Room ID'] == room, 'Status'] = "Available"
-    print(f"{name} checked out successfully.")
-
-# View pending payments
-def view_pending():
-    pending = customers_df[
-        (customers_df['Paid Rent'].str.lower() != 'yes') |
-        (customers_df['Paid Electricity'].str.lower() != 'yes')
-    ]
-    print("\nPending Payments:")
-    print(pending[['Customer Name', 'Room ID', 'Electricity (₹)', 'Paid Rent', 'Paid Electricity']])
-
-# View total income
-def total_income():
-    income = payments_df['Total'].sum()
-    print(f"\n💰 Total Income Collected: ₹{income}")
-
-# Main menu
+def main():
+    choice = input("Enter current month")
+    create_monthly_sheet(choice)
 if __name__ == "__main__":
-    rooms_df, customers_df, payments_df = load_data()
-
-    while True:
-        print("\n--- PG MANAGEMENT SYSTEM ---")
-        print("1. Add New Customer")
-        print("2. Record Payment")
-        print("3. Checkout Customer")
-        print("4. View Pending Payments")
-        print("5. View Total Income")
-        print("6. Exit")
-
-        choice = input("Enter your choice: ")
-
-        if choice == '1':
-            add_customer()
-        elif choice == '2':
-            record_payment()
-        elif choice == '3':
-            checkout_customer()
-        elif choice == '4':
-            view_pending()
-        elif choice == '5':
-            total_income()
-        elif choice == '6':
-            save_data(rooms_df, customers_df, payments_df)
-            print("✅ Data saved. Goodbye!")
-            break
-        else:
-            print("❌ Invalid choice. Try again.")
-
+    main()   
+    
